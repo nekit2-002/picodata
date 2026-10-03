@@ -80,8 +80,6 @@ impl<S: io::Read + io::Write> PgClient<S> {
         let mut handled_options = HashMap::new();
         if let Some(opts) = self.backend.params()._rest.get("options") {
             let mut msg = String::from("Parsed the following unknown options:\n");
-            // send NoticeResponse message only if we detect any unknown param
-            let mut send = false;
             for opt in opts.split(',') {
                 let mut opt = opt.split('=');
                 // We can unwrap these values because options have already been parsed in
@@ -97,7 +95,6 @@ impl<S: io::Read + io::Write> PgClient<S> {
                     val = "\'empty value\'";
                 }
                 if !possible_options.contains(name) {
-                    send = true;
                     handled_options.insert(name, val);
                 }
             }
@@ -107,7 +104,7 @@ impl<S: io::Read + io::Write> PgClient<S> {
                 msg.push_str(&end);
             }
 
-            if send {
+            if !handled_options.is_empty() {
                 let msg = BeMessage::NoticeResponse(NoticeResponse::new(Vec::from([
                     (b'S', "WARNING".to_string()),
                     (b'C', "01000".to_string()),
