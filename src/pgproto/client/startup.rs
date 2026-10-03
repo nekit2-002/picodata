@@ -22,6 +22,10 @@ pub struct ClientParams {
     options: PartialOptions,
     is_statement_invalidation: bool,
     is_query_metadata: bool,
+    // We need this in order:
+    // 1. not to parse `options` string (contained in _rest field) twice
+    // 2. to pass options pairs to caller via ClientParams struct
+    unknown_options: Option<BTreeMap<String, String>>,
     _rest: BTreeMap<String, String>,
     // NB: add more params as needed.
     // Keep in mind that a client is required to send only "user".
@@ -63,6 +67,7 @@ impl ClientParams {
         let mut options_accumulator = PartialOptions::default();
         let mut is_statement_invalidation = false;
         let mut is_query_metadata = false;
+        let mut unknown_options = BTreeMap::new();
         if let Some(options) = parameters.get("options") {
             for pair in options.split(',') {
                 let mut pair = pair.split('=');
@@ -121,6 +126,7 @@ impl ClientParams {
                         //    make it impossible to work with such clients. However, we're not
                         //    sure if any clients do this.
                         tlog!(Warning, "unknown option: '{name}'");
+                        unknown_options.insert(name.to_string(), val.to_string());
                     }
                 }
             }
@@ -148,6 +154,11 @@ impl ClientParams {
             options: options_accumulator,
             is_query_metadata,
             is_statement_invalidation,
+            unknown_options: if unknown_options.is_empty() {
+                None
+            } else {
+                Some(unknown_options)
+            },
             _rest: parameters,
         })
     }
@@ -162,6 +173,10 @@ impl ClientParams {
 
     pub fn statement_invalidation_enabled(&self) -> bool {
         self.is_statement_invalidation
+    }
+
+    pub fn get_unknown_options(&self) -> &Option<BTreeMap<String, String>> {
+        &self.unknown_options
     }
 }
 
