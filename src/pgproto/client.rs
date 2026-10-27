@@ -6,7 +6,7 @@ use super::{
     tls::TlsAcceptor,
 };
 use crate::{storage::Catalog, tlog};
-use pgwire::messages::startup::*;
+use pgwire::messages::{response::NoticeResponse, startup::ParameterStatus};
 use smol_str::format_smolstr;
 use std::io;
 
@@ -62,6 +62,28 @@ impl<S: io::Read + io::Write> PgClient<S> {
         let msg = BeMessage::ParameterStatus(ParameterStatus::new(name, value));
         self.stream.write_message_noflush(msg)?;
         Ok(self)
+    }
+
+    pub fn handle_unknown_options(&mut self) -> PgResult<()> {
+        if let Some(opts) = self.backend.params().get_unknown_options() {
+            let mut message = String::from("Parsed the following unknown options:\n");
+            for (k, v) in opts.iter() {
+                message.push_str(k);
+                message.push(':');
+                message.push(' ');
+                message.push_str(v);
+                message.push('\n');
+            }
+
+            let message = BeMessage::NoticeResponse(NoticeResponse::new(Vec::from([
+                (b'S', "WARNING".to_string()),
+                (b'C', "01000".to_string()),
+                (b'M', message),
+            ])));
+            self.stream.write_message_noflush(message)?;
+        }
+
+        Ok(())
     }
 }
 
